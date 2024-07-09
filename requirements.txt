@@ -1,0 +1,5 @@
+gymnasium
+torch
+pettingzoo
+tensorboard
+torch-geometric

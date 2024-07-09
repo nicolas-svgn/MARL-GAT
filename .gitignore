@@ -1,0 +1,6 @@
+.idea
+venv
+__pycache__
+.ipynib_checkpoints
+logs
+env/custom_env/Sumo
