@@ -3,3 +3,5 @@ torch
 pettingzoo
 tensorboard
 torch-geometric
+supersuit
+stable-baselines3
