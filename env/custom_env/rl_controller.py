@@ -137,15 +137,13 @@ class RLController(SumoEnv):
 
 
 
-    def obs(self):
-        tl_id = self.next_tl_id
+    def obs(self, tl_id):
 
-        obs = self.get_dtse(tl_id)
+        obs = self.get_dtse_array(tl_id)
 
         return obs
 
-    def rew(self):
-        tl_id = self.next_tl_id
+    def rew(self, tl_id):
 
         """
         sum_delay = self.get_sum_delay(tl_id)
@@ -183,8 +181,11 @@ class RLController(SumoEnv):
 
         return rew
 
-    def done(self):
-        return self.is_simulation_end() or self.get_current_time() >= self.args["steps"]
+    def terminated(self):
+        return self.is_simulation_end() 
+    
+    def truncated(self):
+        return self.get_current_time() >= self.args["steps"]
 
     ####################################################################################################################
     ####################################################################################################################

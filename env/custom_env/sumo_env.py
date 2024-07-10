@@ -155,6 +155,9 @@ class SumoEnv:
 
     def info(self):
         return {} if not self.log else self.log_info()
+    
+    def info_tl_id(self, tl_id):
+        return self.log_info_tl_id(tl_id)
 
     def is_simulation_end(self):
         return traci.simulation.getMinExpectedNumber() == 0
@@ -559,3 +562,60 @@ class SumoEnv:
             "avg_acc_waiting_time": avg_acc_waiting_time,
             "avg_queue_length": avg_queue_length
         }
+    
+    import json
+
+    def log_info_tl_id(self, tl_id):
+        """Calculates and returns traffic statistics for a specific traffic light.
+
+        Args:
+            target_tl_id (str): The ID of the traffic light to analyze.
+
+        Returns:
+            dict: A dictionary containing traffic statistics, or None if the traffic 
+                light ID is invalid.
+        """
+
+        if tl_id not in self.tl_ids:
+            return {}  # Handle invalid traffic light ID
+
+        veh_n = 0
+        sum_delay, sum_waiting_time, sum_acc_waiting_time, sum_queue_length = 0, 0, 0, 0
+    
+        # Only iterate through the vehicles for the specified traffic light:
+        for veh_id in self.yield_tl_vehs(tl_id):  
+            veh_n += 1
+            sum_delay += self.get_veh_delay(veh_id)
+            wt = self.get_veh_waiting_time(veh_id)
+            sum_waiting_time += wt
+            sum_acc_waiting_time += self.get_veh_accumulated_waiting_time(veh_id)
+            if wt > 0:
+                sum_queue_length += 1
+
+        # Calculate averages, handle division by zero:
+        avg_delay = sum_delay / veh_n if veh_n > 0 else 0
+        avg_waiting_time = sum_waiting_time / veh_n if veh_n > 0 else 0
+        avg_acc_waiting_time = sum_acc_waiting_time / veh_n if veh_n > 0 else 0
+
+        # Calculate average queue length, but only for lanes controlled by this TL:
+        avg_queue_length = sum_queue_length / len(self.get_all_incoming_lanes()) 
+
+
+        return {
+            "id": type(self).__name__.lower(),
+            "tl_id": tl_id,  # Include the traffic light ID
+            "ep": self.ep_count,
+            "con_p_rate": self.con_p_rate,
+            "ctrl_con_p_rate": self.ctrl_con_p_rate,
+            "veh_n_p_hour": json.dumps(self.veh_n_p_hour),
+            "veh_n": veh_n,
+            "sum_delay": sum_delay,
+            "sum_waiting_time": sum_waiting_time,
+            "sum_acc_waiting_time": sum_acc_waiting_time,
+            "sum_queue_length": sum_queue_length,
+            "avg_delay": avg_delay,
+            "avg_waiting_time": avg_waiting_time,
+            "avg_acc_waiting_time": avg_acc_waiting_time,
+            "avg_queue_length": avg_queue_length
+        }
+

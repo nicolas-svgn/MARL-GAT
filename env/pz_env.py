@@ -14,16 +14,19 @@ from gymnasium.utils import EzPickle, seeding
 
 
 class CustomPZEnv(ParallelEnv, EzPickle):
-    """The metadata holds environment constants.
+    """Parallel environment class.
+
+    It steps every live agent at once. The metadata holds environment constants.
 
     The "name" metadata allows the environment to be pretty printed.
     """
 
     metadata = {
+        'render_modes': ['ansi'],
         "name": "custom_environment_v0",
     }
 
-    def __init__(self, n_agents: int = 9):
+    def __init__(self, n_agents: int = 9, render_mode='ansi'):
         """The init method takes in environment arguments.
 
         Note: as of v1.18.1, the action_spaces and observation_spaces attributes are deprecated.
@@ -34,22 +37,25 @@ class CustomPZEnv(ParallelEnv, EzPickle):
         """
         EzPickle.__init__(
             self,
-            n_agents
+            n_agents,
+            render_mode
         )
 
         self.n_agents = n_agents
 
+        self.render_mode = render_mode
+
         self._episode_ended = False
 
-        self.sumo_env = RLController(gui=SUMO_PARAMS["gui"], log=SUMO_PARAMS["log"], rnd=SUMO_PARAMS["rnd"])
+        self.sumo_env = RLController(gui=False, log=False, rnd=(True, True))
 
         self.possible_agents = self.sumo_env.tl_ids
 
         self.agents = self.possible_agents[:]
 
-        self.agent_name_mapping = dict(
+        """self.agent_name_mapping = dict(
             zip(self.agents, list(range(len(self.agents))))
-        )
+        )"""
 
         self.observation_spaces = spaces.Dict({agent: spaces.Box(low=0, high=1, shape=self.sumo_env.observation_space_n, dtype=np.float32) for agent in self.agents})
 
@@ -68,7 +74,31 @@ class CustomPZEnv(ParallelEnv, EzPickle):
     def action_space(self, agent):
         return self.action_spaces[agent]
     
+    def observation(self, agent):
+        observation = self.sumo_env.obs(agent)
+        return observation
+    
+    def reward(self, agent):
+        reward = self.sumo_env.rew(agent)
+        return reward
+    
+    def terminated(self):
+        terminated = self.sumo_env.terminated()
+        return terminated
+    
+    def truncated(self):
+        truncated = self.sumo_env.truncated()
+        return truncated
+
+    def info(self, agent):
+        info = self.sumo_env.info_tl_id(agent)
+        return info
+    
     def reset(self, seed=None, options=None):
+        """Resets the environment.
+
+        And returns a dictionary of observations (keyed by the agent name)
+        """
         if seed is not None:
             self.seed(seed)
 
@@ -78,11 +108,41 @@ class CustomPZEnv(ParallelEnv, EzPickle):
         self._episode_ended = False
         self.current_step = 0
 
+        observations = {agent: self.observation(agent) for agent in self.agents}
+
+        return observations
+
     def state(self):
+        """Returns the state.
+
+        State returns a global view of the environment appropriate for
+        centralized training
+        """
         global_state = []
         for agent in self.agents:
             global_state.append(self.sumo_env.get_dtse_array(agent))
             global_state_array = np.array(global_state)
 
         return global_state_array
+    
+    def step(self, actions):
+        print('haha')
+        print(actions)
+        print('huhu')
+        if self.terminated() or self.truncated():
+            return self.reset()
+        self.sumo_env.step(actions)
+        observations = {agent: self.observation(agent) for agent in self.agents}
+        rewards = {agent: self.reward(agent) for agent in self.agents}
+        self.current_step += 1
+        infos = {agent: self.info(agent) for agent in self.agents}
+        terminated = {agent: self.terminated() for agent in self.agents}
+        truncated = {agent: self.truncated() for agent in self.agents}
+
+        return observations, rewards, terminated, truncated, infos
+    
+
+    def render(self, mode="human"):
+        # TODO: IMPLEMENT
+        print("TO BE IMPLEMENTED")
     

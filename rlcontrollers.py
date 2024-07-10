@@ -1,4 +1,4 @@
-from env import RLController, SumoEnv
+from env import RLController, SumoEnv, CustomEnv
 
 import random
 
@@ -9,6 +9,7 @@ import itertools
 from datetime import timedelta
 import numpy as np
 import torch as T
+import supersuit as ss
 
 def main():
     sumo_env = RLController(gui=False, log=False, rnd=(True, True))
@@ -44,6 +45,21 @@ def main():
 
     global_state_array = np.array(global_state)
     print(global_state_array.shape)
+
+    first_channel_arrays = global_state_array[:, 0, :, :]
+    import matplotlib.pyplot as plt
+
+    # Plot each (12, 20) matrix from the first channel of the (3, 12, 20) matrices
+    fig, axes = plt.subplots(2, 4, figsize=(20, 10))  # Create a 2x4 grid of subplots
+
+    for i in range(9):
+        ax = axes[i // 4, i % 4]  # Get the appropriate subplot
+        ax.imshow(first_channel_arrays[i], cmap='viridis', aspect='auto')
+        ax.set_title(f'Traffic Light ID: {sumo_env.tl_ids[i]}')
+        ax.axis('off')  # Turn off the axis
+
+    plt.tight_layout()
+    plt.show()
 
     """ for _ in range(1000):
         random_number = random.randint(0, 3)
@@ -235,6 +251,32 @@ def main():
                 actions = [env.action_space.sample() for agent in agents]
                 print(actions) """
 
+def main5():
+    env = CustomEnv()
+    tls = env.sumo_env.tl_ids
+    obs = env.reset()
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+
+    for _ in range(2):
+        actions = [random.randint(0,3) for tl_id in tls]
+        actions = dict(zip(tls,actions))
+        print('yo')
+        print(actions)
+        print('wesh')
+        obs, rew, terminated, truncated, infos = env.step(actions)
+        print('--------------------')
+        print(obs)
+        print('--------------------')
+        print(rew)
+        print('--------------------')
+        print(terminated)
+        print('--------------------')
+        print(truncated)
+        print('--------------------')
+        print(infos)
+        print('--------------------')
+
+
         
         
 
@@ -272,7 +314,8 @@ if __name__ == "__main__":
                         )
     parser.add_argument('-tl_ids',default=HYPER_PARAMS["tl_ids"], help = 'Traffic light ids to train')"""
     #print(parser.parse_args().tl_ids)
-    main()
+    #main()
     #main2()
     #main3()
     #main4()
+    main5()
