@@ -41,7 +41,7 @@ class RLController(SumoEnv):
 
     def step(self, actions):
         # action = random.randint(0, self.action_space_n-1)
-        #print(f"actions: {actions}")
+        print(f"actions: {actions}")
         for tl_id, action in actions.items():
             current_phase = self.get_ryg_state(tl_id)
             #print(f"current phase: {current_phase}")

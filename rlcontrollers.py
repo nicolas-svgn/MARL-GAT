@@ -10,6 +10,8 @@ from datetime import timedelta
 import numpy as np
 import torch as T
 import supersuit as ss
+from stable_baselines3.common.env_checker import check_env
+from gymnasium.vector.utils import concatenate, create_empty_array, iterate
 
 def main():
     sumo_env = RLController(gui=False, log=False, rnd=(True, True))
@@ -22,11 +24,6 @@ def main():
     tls = sumo_env.tl_ids
     actions = [random.randint(0,3) for tl_id in tls]
     actions = dict(zip(tls,actions))
-    sumo_env.step(actions)
-
-    actions = [random.randint(0,3) for tl_id in tls]
-    actions = dict(zip(tls,actions))
-    sumo_env.step(actions)
 
     for _ in range(100):
         actions = [random.randint(0,3) for tl_id in tls]
@@ -34,42 +31,22 @@ def main():
         print(actions)
         sumo_env.step(actions)
 
-    global_state = []
-
-    for tl_id in sumo_env.tl_ids:
+    for tl_id in tls:
         print(tl_id)
         print("--------------------")
-        #print(sumo_env.get_dtse_array(tl_id))
+        print(sumo_env.obs(tl_id))
         print("--------------------")
-        global_state.append(sumo_env.get_dtse_array(tl_id))
 
-    global_state_array = np.array(global_state)
-    print(global_state_array.shape)
 
-    first_channel_arrays = global_state_array[:, 0, :, :]
-    import matplotlib.pyplot as plt
-
-    # Plot each (12, 20) matrix from the first channel of the (3, 12, 20) matrices
-    fig, axes = plt.subplots(2, 4, figsize=(20, 10))  # Create a 2x4 grid of subplots
-
-    for i in range(9):
-        ax = axes[i // 4, i % 4]  # Get the appropriate subplot
-        ax.imshow(first_channel_arrays[i], cmap='viridis', aspect='auto')
-        ax.set_title(f'Traffic Light ID: {sumo_env.tl_ids[i]}')
-        ax.axis('off')  # Turn off the axis
-
-    plt.tight_layout()
-    plt.show()
-
-    """ for _ in range(1000):
+    """for _ in range(1000):
         random_number = random.randint(0, 3)
         sumo_env.step(random_number)
     for tl_id in sumo_env.tl_ids:
         print(tl_id)
         print("--------------------")
         sumo_env.print_dtse(sumo_env.get_dtse(tl_id))
-        print("--------------------")
- """
+        print("--------------------")"""
+
     """for step in range(2):
          print("----------------------------")
          print(step)
@@ -254,12 +231,22 @@ def main():
 def main5():
     env = CustomEnv()
     tls = env.sumo_env.tl_ids
-    obs = env.reset()
+    print(tls)
+    print(env.action_space)
+    print(env.observation_space)
+    print(env.metadata)
+    actions = [random.randint(0,3) for tl_id in tls]
+    actions = dict(zip(tls,actions))
+    print(actions)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(env, 1, base_class="stable_baselines3")
+    #obs, _ = env.reset()
+    #print(obs)
+    
 
-    for _ in range(2):
+    """for _ in range(2):
         actions = [random.randint(0,3) for tl_id in tls]
-        actions = dict(zip(tls,actions))
+        #actions = dict(zip(tls,actions))
         print('yo')
         print(actions)
         print('wesh')
@@ -274,7 +261,7 @@ def main5():
         print(truncated)
         print('--------------------')
         print(infos)
-        print('--------------------')
+        print('--------------------')"""
 
 
         

@@ -109,8 +109,9 @@ class CustomPZEnv(ParallelEnv, EzPickle):
         self.current_step = 0
 
         observations = {agent: self.observation(agent) for agent in self.agents}
+        infos = {agent: self.info(agent) for agent in self.agents}
 
-        return observations
+        return observations, {i: {} for i in self.possible_agents}
 
     def state(self):
         """Returns the state.
@@ -129,8 +130,8 @@ class CustomPZEnv(ParallelEnv, EzPickle):
         print('haha')
         print(actions)
         print('huhu')
-        if self.terminated() or self.truncated():
-            return self.reset()
+        #if self.terminated() or self.truncated():
+            #return self.reset()
         self.sumo_env.step(actions)
         observations = {agent: self.observation(agent) for agent in self.agents}
         rewards = {agent: self.reward(agent) for agent in self.agents}
