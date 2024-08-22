@@ -102,6 +102,8 @@ class SumoEnv:
 
         self.ep_count = 0
 
+        traci.close()
+
     def set_params(self):
         params = [
             SUMO_HOME + "bin/sumo" + ("-gui" if self.gui else ""), "-c",

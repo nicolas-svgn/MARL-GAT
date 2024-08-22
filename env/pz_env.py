@@ -127,9 +127,6 @@ class CustomPZEnv(ParallelEnv, EzPickle):
         return global_state_array
     
     def step(self, actions):
-        print('haha')
-        print(actions)
-        print('huhu')
         #if self.terminated() or self.truncated():
             #return self.reset()
         self.sumo_env.step(actions)

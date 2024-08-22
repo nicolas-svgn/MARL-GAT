@@ -24,7 +24,7 @@ class RLController(SumoEnv):
         self.observation_space_n = self.dtse_shape
 
     def reset(self):
-        self.simulation_reset()
+        self.start()
         self.schedulers = {tl_id: TlScheduler(self.tg + self.ty + self.tr, tl_id) for tl_id in self.tl_ids}
         self.next_tl_id = self.tl_ids[0]
 
@@ -41,7 +41,6 @@ class RLController(SumoEnv):
 
     def step(self, actions):
         # action = random.randint(0, self.action_space_n-1)
-        print(f"actions: {actions}")
         for tl_id, action in actions.items():
             current_phase = self.get_ryg_state(tl_id)
             #print(f"current phase: {current_phase}")
