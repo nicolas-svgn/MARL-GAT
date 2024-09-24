@@ -45,13 +45,34 @@ class Embedder:
             self.base_network.save(self.save_path, self.step, self.episode_count, self.info_mean('r'), self.info_mean('l'))
             print("OK!")
 
-    def graph_embed_state(self, state):
-        state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        all_agent_obs = torch.stack([self.base_network(state[i]) for i in range(9)])  # Shape: (9, 1, 8)
-        all_agent_obs = all_agent_obs.view(9, 8) 
+    """def graph_embed_state(self, state):
+        embedded_state = torch.tensor(state, dtype=torch.float32).to(self.device)
+        all_agent_obs = torch.stack([self.base_network(embedded_state[i].unsqueeze(0).clone()) for i in range(9)])  # Shape: (9, 1, 8)
+        all_agent_obs_reshaped = all_agent_obs.view(9, 8) 
 
+        return all_agent_obs_reshaped"""
+    
+    def graph_embed_state(self, state):
+        embedded_state = torch.tensor(state, dtype=torch.float32).to(self.device)
+        all_agent_obs = torch.stack([
+            self.base_network(embedded_state[i].unsqueeze(0)).squeeze(0)
+            for i in range(9)
+        ])  # Shape: (9, 8)
         return all_agent_obs
     
     def embed_agent_obs(self, obs):
-        obs = torch.tensor(obs, dtype=torch.float32).to(self.device)
-        return self.base_network(obs)
+        t_obs = torch.tensor(obs, dtype=torch.float32).to(self.device)
+        #print(f"Initial t_obs shape: {t_obs.shape}")
+        
+        # Ensure t_obs has the batch dimension
+        if t_obs.dim() == len(self.input_dim):
+            t_obs = t_obs.unsqueeze(0)
+            #print(f"Batch dimension added. t_obs shape: {t_obs.shape}")
+        
+        embedded_obs = self.base_network(t_obs)
+        
+        # Remove batch dimension from the output
+        embedded_obs = embedded_obs.squeeze(0)
+        #print(f"Embedded observation shape after squeeze: {embedded_obs.shape}")
+        
+        return embedded_obs

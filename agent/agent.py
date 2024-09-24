@@ -62,6 +62,12 @@ class TGATA2CAgent:
         self.historical_buffer = HistoricalBuffer(self.tl_id)
         self.edge_index = edge_index  # Store the edge index for GAT
 
+        self.gat_features = torch.zeros(9,2)
+        self.new_gat_features = torch.zeros(9,2)
+        self.current_t_obs = torch.zeros(8)
+        self.new_t_obs = torch.zeros(8)
+        self.current_action = 0
+
     def load_model(self):
         if self.load and os.path.exists(self.save_path):
             print()
@@ -87,25 +93,22 @@ class TGATA2CAgent:
             return np.interp(self.step, [0, self.epsilon_decay], [self.epsilon_start, self.epsilon_min])
         
     def load_hist_buffer(self, obs_tensor):
-        assert obs_tensor.size() == torch.Size([1, 8]), f"Expected obs_tensor size: torch.Size([1, 8]), but got {obs_tensor.size()}"
-        self.historical_buffer.store(obs_tensor)
+        assert obs_tensor.size() == torch.Size([8]), f"Expected obs_tensor size: torch.Size([1, 8]), but got {obs_tensor.size()}"
+        self.historical_buffer.store(obs_tensor.detach().clone())
+
 
 
     def temporal_graph_forward(self, obs, gat_features):
-        historical_obs = self.historical_buffer.get()
+        historical_obs = self.historical_buffer.get().copy()
         historical_obs.append(obs)
         gat_agent_feature = gat_features[self.tl_map_id].unsqueeze(0)
 
         # Prepare LSTM input
-        lstm_input = torch.stack(historical_obs, dim=1)
-        lstm_input = lstm_input.permute(1, 0, 2) 
-        print('lstm input')
-        #print(lstm_input)
+        lstm_input = torch.stack(historical_obs, dim=0)
+        lstm_input_reshaped = lstm_input.unsqueeze(1) 
 
         # Get outputs from LSTM and GAT
-        lstm_output = self.lstm_network(lstm_input)
-        print('lstm output')
-        #print(lstm_output)
+        lstm_output = self.lstm_network(lstm_input_reshaped)
 
         combined_output = torch.cat((lstm_output, gat_agent_feature), dim=-1)
 
@@ -116,58 +119,42 @@ class TGATA2CAgent:
         #if random.random() < self.epsilon():
         if 1 <0:
             # Exploration: choose a random action
-            return random.randint(0, 3), None  # Assuming action space is Discrete(4)
+            with torch.no_grad(): 
+                return random.randint(0, 3), None  # Assuming action space is Discrete(4)
         else:
             # Exploitation: use the actor network to choose an action
+
             combined_ouput = self.temporal_graph_forward(obs, gat_features)
-            print('combined output')
-            #print(combined_ouput)
 
             # Get action distribution from the actor network
-            dist, log_probs = self.actor_network(combined_ouput)
+            dist = self.actor_network(combined_ouput)
             action = dist.sample()
+            log_prob = dist.log_prob(action)
 
-            return action.item(), log_probs
+
+            return action.item(), log_prob
         
     def learn(self, gat_features, new_gat_features, log_prob_action, obs, new_obs, reward, done):
-        print('obs')
-        print(obs)
-        print('new obs')
-        print(new_obs)
-        print('forward obs')
+
         forward_obs = self.temporal_graph_forward(obs, gat_features)
-        print(forward_obs)
         self.load_hist_buffer(new_obs)
         forward_new_obs = self.temporal_graph_forward(new_obs, new_gat_features)
-        print('forward new obs')
-        print(forward_new_obs)
 
         mask = 1 - done
         pred_value = self.critic_network(forward_obs)
-        print('predicted value')
-        print(pred_value)
+
         targ_value = reward + self.gamma * self.critic_network(forward_new_obs) * mask
-        print('target value')
-        print(targ_value)
+ 
         value_loss = F.smooth_l1_loss(pred_value, targ_value.detach())
+   
 
         # update value
-        self.critic_network.optimizer.zero_grad()
-        self.lstm_network.optimizer.zero_grad()
-        value_loss.backward()
-        self.critic_network.optimizer.step()
-        self.lstm_network.optimizer.step()
 
         advantage = (targ_value - pred_value).detach()
-        print('advantage')
-        print(advantage)
 
         policy_loss = -advantage * log_prob_action
-        policy_loss += self.entropy_weight * -log_prob_action
+        policy_loss_entropy_adjusted = policy_loss + self.entropy_weight * -log_prob_action
 
-        self.actor_network.optimizer.zero_grad()
-        policy_loss.backward()
-        self.actor_network.optimizer.step()
-        self.lstm_network.optimizer.step()
-        
+
+        return value_loss, policy_loss_entropy_adjusted
         

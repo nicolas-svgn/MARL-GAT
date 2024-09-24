@@ -44,58 +44,110 @@ class Network(nn.Module):
         return params_dict['step'], params_dict['episode_count'], params_dict['rew_mean'], params_dict['len_mean']
 
 
-class BaseNetwork(Network):
+"""class BaseNetwork(Network):
     def __init__(self, device, input_dim, learning_rate):
         super(BaseNetwork, self).__init__()
 
-        self.to(device)
+        self.device = device
         self.learning_rate = learning_rate
 
         # Convolutional Layers
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(input_dim.shape[0], 16, kernel_size=(4, 4), stride=(2, 2)),
+            nn.Conv2d(input_dim[0], 16, kernel_size=(4, 4), stride=(2, 2)),
             nn.ELU(alpha=1.0),
             nn.Conv2d(16, 32, kernel_size=(2, 2), stride=(1, 1)),
             nn.ELU(alpha=1.0)
         ).to(device)
 
-        # Flatten layer
-        self.flatten = nn.Flatten().to(device)
-
         # Dynamic Calculation of Linear Input Size
         with torch.no_grad():
-            dummy_input = torch.zeros(1, *input_dim.shape).to(device)
+            dummy_input = torch.zeros(1, *input_dim).to(device)
             conv_output = self.conv_layers(dummy_input)
-            print("Shape after conv layers:", conv_output.shape)  # Add this print
-            flattened_output = self.flatten(conv_output)
-            print("Shape after flattening:", flattened_output.shape)  # Add this print
-            linear_input_size = flattened_output.shape[-1]
+            print("Shape after conv layers:", conv_output.shape)
+            flattened_size = conv_output.view(1, -1).size(1)
+            print("Flattened size:", flattened_size)
 
         # Fully Connected Layers (with dynamic input size)
-        self.fc_layers  = nn.Sequential(
-            nn.Linear(linear_input_size, 128),
-            nn.ELU(alpha=1.0),
+        self.fc_layers = nn.Sequential(
+            nn.Linear(flattened_size, 128),
+            nn.ELU(inplace=False),
             nn.Linear(128, 64),
-            nn.ELU(alpha=1.0),
+            nn.ELU(inplace=False),
             nn.Linear(64, 32),
-            nn.ELU(alpha=1.0),
+            nn.ELU(inplace=False),
             nn.Linear(32, 16),
-            nn.ELU(alpha=1.0),
+            nn.ELU(inplace=False),
             nn.Linear(16, 8),
         ).to(device)
-
-        # Loss Function
-        #self.loss = nn.SmoothL1Loss()
 
         # Optimizer
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
-    def forward(self, x):
-        x = self.conv_layers(x).unsqueeze(0)
-        x = self.flatten(x)
-        x = self.fc_layers(x)
+    def forward(self, s):
+        x = self.conv_layers(s)
+        x = x.view(x.size(0), -1)  # Flatten while preserving the batch dimension
+        v = self.fc_layers(x)
+        return v"""
+
+class BaseNetwork(Network):
+    def __init__(self, device, input_dim, learning_rate):
+        super(BaseNetwork, self).__init__()
+
+        self.device = device
+        self.learning_rate = learning_rate
+
+        # First convolutional layer
+        self.conv1 = nn.Conv2d(
+            in_channels=3,
+            out_channels=16,
+            kernel_size=(4, 4),
+            stride=(2, 2)
+        )
+        # Second convolutional layer
+        self.conv2 = nn.Conv2d(
+            in_channels=16,
+            out_channels=32,
+            kernel_size=(2, 2),
+            stride=(1, 1)
+        )
+        # Activation function
+        self.elu = nn.ELU()
         
+        # Calculate the size of the flattened feature vector after the convolutional layers
+        # Input dimensions: (channels=3, height=12, width=20)
+        # After conv1: (channels=16, height=5, width=9)
+        # After conv2: (channels=32, height=4, width=8)
+        self.flatten_dim = 32 * 4 * 8  # 1024
+        
+        # Fully connected layers
+        self.fc1 = nn.Linear(self.flatten_dim, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 16)
+        self.fc4 = nn.Linear(16, 8)
+
+        # Optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        
+    def forward(self, x):
+        # Convolutional layers with ELU activation
+        x = self.conv1(x)
+        x = self.elu(x)
+        x = self.conv2(x)
+        x = self.elu(x)
+        
+        # Flatten the tensor
+        x = x.view(x.size(0), -1)
+        
+        # Fully connected layers with ELU activation
+        x = self.fc1(x)
+        x = self.elu(x)
+        x = self.fc2(x)
+        x = self.elu(x)
+        x = self.fc3(x)
+        x = self.elu(x)
+        x = self.fc4(x)  # No activation after the last layer
         return x
+
     
 class GATNetwork(Network):
     def __init__(self, learning_rate, num_features=8, num_heads=6, output_dim=2):
@@ -135,7 +187,7 @@ class ActorNetwork(Network):
         logits = self.fc2(x)
         probs = F.softmax(logits, dim=-1)  # Apply softmax to get probabilities
         dist = Categorical(probs)          # Create a categorical distribution
-        return dist, dist.log_prob(torch.arange(self.num_actions))
+        return dist
 
     
 class CriticNetwork(Network):

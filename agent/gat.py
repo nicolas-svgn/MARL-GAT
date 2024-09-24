@@ -45,4 +45,5 @@ class GATBlock:
             print("OK!")
 
     def gat_output(self, graph_features):
-        return self.gat_network(graph_features, self.edge_index)
+        gat_output = self.gat_network(graph_features, self.edge_index)
+        return gat_output

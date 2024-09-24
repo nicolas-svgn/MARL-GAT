@@ -6,7 +6,7 @@ class HistoricalBuffer:
         self.tl_id = tl_id
 
     def store(self, obs):
-        self.buffer.append(obs)
+        self.buffer.append(obs.clone())
 
     def get(self):
-        return list(self.buffer)  # Convert deque to list
+        return [obs.clone() for obs in self.buffer]  # Convert deque to list
