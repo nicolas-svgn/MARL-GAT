@@ -47,8 +47,29 @@ class GraphConverter:
         return G
     
     def get_edge_matrix(self, graph):
+        """
+        Converts the graph edges into a matrix format suitable for use with PyTorch.
+
+        Args:
+            graph (nx.Graph or nx.DiGraph): The NetworkX graph whose edges are to be converted.
+
+        Returns:
+            torch.Tensor: A 2xN tensor where N is the number of edges. Each column represents an edge,
+                        with the first row containing the source node indices and the second row
+                        containing the target node indices.
+
+        This method first creates a mapping from node labels to integer indices, which is necessary
+        for converting the graph into a format that can be used with PyTorch. It then constructs
+        a NumPy array of edge indices, where each edge is represented by a pair of node indices.
+        Finally, it converts this NumPy array into a PyTorch tensor.
+        """
+        # Create a dictionary mapping each node to a unique integer index
         node_to_index = {node: i for i, node in enumerate(graph.nodes())}
+
+        # Construct a NumPy array of edge indices
         edge_index_np = np.array([(node_to_index[u], node_to_index[v]) for u, v in graph.edges()]).T
+
+        # Convert the NumPy array to a PyTorch tensor
         edge_index = torch.tensor(edge_index_np, dtype=torch.long)
 
         return edge_index

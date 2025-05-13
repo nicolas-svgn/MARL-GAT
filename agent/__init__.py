@@ -1,5 +1,5 @@
 from .hist_buffer import HistoricalBuffer
-from .network2 import Network, BaseNetwork, GATNetwork, LSTMNetwork, ActorNetwork, CriticNetwork
+from .network import Network, BaseNetwork, GATNetwork, LSTMNetwork, ActorNetwork, CriticNetwork
 from .agent import TGATA2CAgent
 from .embedder import Embedder
 from .gat import GATBlock

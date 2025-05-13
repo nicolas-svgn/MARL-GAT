@@ -1,78 +1,143 @@
-from .network2 import BaseNetwork
-
-import os
 import torch
 import numpy as np
+from .network import BaseNetwork
 
 class Embedder:
-    def __init__(self, device, input_dim, lr_base):
-        # Networks
+    """
+    Embedder class for encoding DTSE observations into fixed-size embeddings.
+    Uses a BaseNetwork to transform 3D observations (3,12,20) into 1D embeddings (8).
+    """
+
+    def __init__(self, device=None, learning_rate=1e-4, input_shape=(3, 12, 20)):
+        """
+        Initialize the Embedder with a BaseNetwork.
+        
+        Args:
+            device (torch.device, optional): Device to use for computation (CPU/GPU).
+            learning_rate (float, optional): Learning rate for the base network.
+            input_shape (tuple, optional): Shape of input observations (channels, height, width).
+        """
+        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.base_network = BaseNetwork(
+            device=self.device,
+            learning_rate=learning_rate,
+            input_shape=input_shape
+        )
+        self.input_shape = input_shape
+        
+    def embed_observation(self, observation):
+        """
+        Embed a single agent's observation into an 8-dimensional vector.
+        
+        Args:
+            observation (numpy.ndarray or torch.Tensor): Observation with shape (3, 12, 20).
+            
+        Returns:
+            torch.Tensor: Embedded observation with shape (8).
+        """
+        # Ensure observation has the correct shape
+        if isinstance(observation, np.ndarray):
+            if observation.shape != self.input_shape:
+                raise ValueError(f"Expected observation shape {self.input_shape}, got {observation.shape}")
+            # Convert numpy array to torch tensor
+            observation = torch.tensor(observation, dtype=torch.float32, device=self.device)
+        elif isinstance(observation, torch.Tensor):
+            if tuple(observation.shape) != self.input_shape:
+                raise ValueError(f"Expected observation shape {self.input_shape}, got {tuple(observation.shape)}")
+            observation = observation.to(self.device)
+        else:
+            raise TypeError("Observation must be a numpy array or torch tensor")
+        
+        # Set model to evaluation mode
+        self.base_network.eval()
+        
+        # Process the observation through the base network
+        with torch.no_grad():
+            embedding = self.base_network(observation.unsqueeze(0)).squeeze(0)
+            
+        return embedding
+    
+    def embed_observations(self, observations):
+        """
+        Embed multiple agents' observations into a tensor of embeddings.
+        
+        Args:
+            observations (list, numpy.ndarray, or torch.Tensor): List or batch of observations,
+                each with shape (3, 12, 20).
+                
+        Returns:
+            torch.Tensor: Embedded observations with shape (num_agents, 8).
+        """
+        # Handle different input types
+        if isinstance(observations, list):
+            # Convert list of observations to batch tensor
+            batch = []
+            for obs in observations:
+                if isinstance(obs, np.ndarray):
+                    batch.append(torch.tensor(obs, dtype=torch.float32, device=self.device))
+                elif isinstance(obs, torch.Tensor):
+                    batch.append(obs.to(self.device))
+                else:
+                    raise TypeError("Each observation must be a numpy array or torch tensor")
+            observations_tensor = torch.stack(batch)
+            
+        elif isinstance(observations, np.ndarray):
+            if observations.ndim != 4:
+                raise ValueError(f"Expected 4D array (batch, channels, height, width), got shape {observations.shape}")
+            observations_tensor = torch.tensor(observations, dtype=torch.float32, device=self.device)
+            
+        elif isinstance(observations, torch.Tensor):
+            if observations.dim() != 4:
+                raise ValueError(f"Expected 4D tensor (batch, channels, height, width), got shape {tuple(observations.shape)}")
+            observations_tensor = observations.to(self.device)
+            
+        else:
+            raise TypeError("Observations must be a list, numpy array, or torch tensor")
+        
+        # Set model to evaluation mode
+        self.base_network.eval()
+        
+        # Process the batch of observations
+        with torch.no_grad():
+            embeddings = self.base_network(observations_tensor)
+            
+        return embeddings
+    
+    def save(self, save_path, step=0, episode_count=0, rew_mean=0, len_mean=0):
+        """
+        Save the embedder model to a file.
+        
+        Args:
+            save_path (str): Path to save the model.
+            step (int, optional): Current training step.
+            episode_count (int, optional): Number of episodes completed.
+            rew_mean (float, optional): Mean reward.
+            len_mean (float, optional): Mean episode length.
+        """
+        self.base_network.save(save_path, step, episode_count, rew_mean, len_mean)
+        
+    def load(self, load_path):
+        """
+        Load the embedder model from a file.
+        
+        Args:
+            load_path (str): Path to load the model from.
+            
+        Returns:
+            tuple: Training statistics (step, episode_count, rew_mean, len_mean).
+        """
+        return self.base_network.load(load_path)
+    
+    def to(self, device):
+        """
+        Move the embedder to the specified device.
+        
+        Args:
+            device (torch.device or str): Device to move the model to.
+            
+        Returns:
+            Embedder: Self for chaining.
+        """
         self.device = device
-        self.lr = lr_base
-        self.input_dim = input_dim
-
-        """self.save_frequency = save_frequency
-        self.log_frequency = log_frequency
-        self.load = load
-
-        self.step = 0
-        self.resume_step = 0
-        self.episode_count = 0
-
-        path = 'TGATA2C' + tl_id
-        self.save_path = save_dir + path + '_' + 'model.pack'
-        self.summary_writer = SummaryWriter(log_dir + path + '/')
-
-        self.start_time = time.time()"""
-
-        self.base_network = BaseNetwork(self.device, self.input_dim, self.lr).to(device)
-
-    def load_model(self):
-        if self.load and os.path.exists(self.save_path):
-            print()
-            print("Resume training from " + self.save_path + "...")
-            self.resume_step, self.episode_count, rew_mean, len_mean = self.base_network.load(self.save_path)
-            [self.ep_info_buffer.append({'r': rew_mean, 'l': len_mean}) for _ in range(np.min([self.episode_count, self.ep_info_buffer.maxlen]))]
-            print("Step: ", self.resume_step * self.n_env, ", Episodes: ", self.episode_count, ", Avg Rew: ", rew_mean, ", Avg Ep Len: ", len_mean)
-
-            self.update_target_network(force=True)
-            self.step = self.resume_step
-
-    def save_model(self):
-        if self.step % self.save_frequency == 0 and self.step > self.resume_step:
-            print()
-            print("Saving model...")
-            self.base_network.save(self.save_path, self.step, self.episode_count, self.info_mean('r'), self.info_mean('l'))
-            print("OK!")
-
-    """def graph_embed_state(self, state):
-        embedded_state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        all_agent_obs = torch.stack([self.base_network(embedded_state[i].unsqueeze(0).clone()) for i in range(9)])  # Shape: (9, 1, 8)
-        all_agent_obs_reshaped = all_agent_obs.view(9, 8) 
-
-        return all_agent_obs_reshaped"""
-    
-    def graph_embed_state(self, state):
-        embedded_state = torch.tensor(state, dtype=torch.float32).to(self.device)
-        all_agent_obs = torch.stack([
-            self.base_network(embedded_state[i].unsqueeze(0)).squeeze(0)
-            for i in range(9)
-        ])  # Shape: (9, 8)
-        return all_agent_obs
-    
-    def embed_agent_obs(self, obs):
-        t_obs = torch.tensor(obs, dtype=torch.float32).to(self.device)
-        #print(f"Initial t_obs shape: {t_obs.shape}")
-        
-        # Ensure t_obs has the batch dimension
-        if t_obs.dim() == len(self.input_dim):
-            t_obs = t_obs.unsqueeze(0)
-            #print(f"Batch dimension added. t_obs shape: {t_obs.shape}")
-        
-        embedded_obs = self.base_network(t_obs)
-        
-        # Remove batch dimension from the output
-        embedded_obs = embedded_obs.squeeze(0)
-        #print(f"Embedded observation shape after squeeze: {embedded_obs.shape}")
-        
-        return embedded_obs
+        self.base_network.to(device)
+        return self

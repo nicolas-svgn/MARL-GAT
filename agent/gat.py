@@ -1,49 +1,117 @@
-from .network2 import GATNetwork
-
-import os
 import torch
 import numpy as np
+from .network import GATNetwork
 
 class GATBlock:
-    def __init__(self, device, lr_gat, edge_index):
+    """
+    GATBlock class for processing embedded observations using Graph Attention Networks.
+    Takes embedded observations and processes them through a GATNetwork to capture
+    spatial relationships between agents.
+    """
 
+    def __init__(self, device=None, learning_rate=1e-4, num_features=8, num_heads=6, output_dim=2):
+        """
+        Initialize the GATBlock with a GATNetwork.
+        
+        Args:
+            device (torch.device, optional): Device to use for computation (CPU/GPU).
+            learning_rate (float, optional): Learning rate for the GAT network.
+            num_features (int, optional): Number of input features per node (embedding dimension).
+            num_heads (int, optional): Number of attention heads in the GAT layer.
+            output_dim (int, optional): Output dimension for each node.
+        """
+        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.gat_network = GATNetwork(
+            device=self.device,
+            learning_rate=learning_rate,
+            num_features=num_features,
+            num_heads=num_heads,
+            output_dim=output_dim
+        )
+        self.num_features = num_features
+        self.output_dim = output_dim
+        
+    def process(self, embeddings, edge_index):
+        """
+        Process embedded observations through the GAT network.
+        
+        Args:
+            embeddings (numpy.ndarray or torch.Tensor): Embedded observations with shape (num_agents, features).
+            edge_index (numpy.ndarray or torch.Tensor): Edge indices with shape (2, num_edges).
+            
+        Returns:
+            torch.Tensor: Processed features with shape (num_agents, output_dim).
+        """
+        # Ensure embeddings have the correct shape
+        if isinstance(embeddings, np.ndarray):
+            if embeddings.shape[1] != self.num_features:
+                raise ValueError(f"Expected embeddings with {self.num_features} features, got {embeddings.shape[1]}")
+            # Convert numpy array to torch tensor
+            embeddings = torch.tensor(embeddings, dtype=torch.float32, device=self.device)
+        elif isinstance(embeddings, torch.Tensor):
+            if embeddings.shape[1] != self.num_features:
+                raise ValueError(f"Expected embeddings with {self.num_features} features, got {embeddings.shape[1]}")
+            embeddings = embeddings.to(self.device)
+        else:
+            raise TypeError("Embeddings must be a numpy array or torch tensor")
+            
+        # Ensure edge_index has the correct shape
+        if isinstance(edge_index, np.ndarray):
+            if edge_index.shape[0] != 2:
+                raise ValueError(f"Expected edge_index with shape (2, num_edges), got {edge_index.shape}")
+            # Convert numpy array to torch tensor
+            edge_index = torch.tensor(edge_index, dtype=torch.long, device=self.device)
+        elif isinstance(edge_index, torch.Tensor):
+            if edge_index.shape[0] != 2:
+                raise ValueError(f"Expected edge_index with shape (2, num_edges), got {edge_index.shape}")
+            edge_index = edge_index.to(self.device)
+        else:
+            raise TypeError("Edge index must be a numpy array or torch tensor")
+        
+        # Set model to evaluation mode
+        self.gat_network.eval()
+        
+        # Process the embeddings through the GAT network
+        with torch.no_grad():
+            features = self.gat_network(embeddings, edge_index)
+            
+        return features
+    
+    def save(self, save_path, step=0, episode_count=0, rew_mean=0, len_mean=0):
+        """
+        Save the GAT model to a file.
+        
+        Args:
+            save_path (str): Path to save the model.
+            step (int, optional): Current training step.
+            episode_count (int, optional): Number of episodes completed.
+            rew_mean (float, optional): Mean reward.
+            len_mean (float, optional): Mean episode length.
+        """
+        self.gat_network.save(save_path, step, episode_count, rew_mean, len_mean)
+        
+    def load(self, load_path):
+        """
+        Load the GAT model from a file.
+        
+        Args:
+            load_path (str): Path to load the model from.
+            
+        Returns:
+            tuple: Training statistics (step, episode_count, rew_mean, len_mean).
+        """
+        return self.gat_network.load(load_path)
+    
+    def to(self, device):
+        """
+        Move the GAT block to the specified device.
+        
+        Args:
+            device (torch.device or str): Device to move the model to.
+            
+        Returns:
+            GATBlock: Self for chaining.
+        """
         self.device = device
-        self.lr_gat = lr_gat
-        self.edge_index = edge_index
-
-        """self.save_frequency = save_frequency
-        self.log_frequency = log_frequency
-        self.load = load
-
-        self.step = 0
-        self.resume_step = 0
-        self.episode_count = 0
-
-        path = 'TGATA2C' + tl_id
-        self.save_path = save_dir + path + '_' + 'model.pack'
-        self.summary_writer = SummaryWriter(log_dir + path + '/')
-
-        self.start_time = time.time()"""
-
-        self.gat_network = GATNetwork(self.lr_gat).to(self.device)
-
-    def load_model(self):
-        if self.load and os.path.exists(self.save_path):
-            print()
-            print("Resume training from " + self.save_path + "...")
-            self.resume_step, self.episode_count, rew_mean, len_mean = self.gat_network.load(self.save_path)
-            [self.ep_info_buffer.append({'r': rew_mean, 'l': len_mean}) for _ in range(np.min([self.episode_count, self.ep_info_buffer.maxlen]))]
-            print("Step: ", self.resume_step, ", Episodes: ", self.episode_count, ", Avg Rew: ", rew_mean, ", Avg Ep Len: ", len_mean)
-
-            self.step = self.resume_step
-
-    def save_model(self):
-        if self.step % self.save_frequency == 0 and self.step > self.resume_step:
-            print()
-            print("Saving model...")
-            self.gat_network.save(self.save_path, self.step, self.episode_count, self.info_mean('r'), self.info_mean('l'))
-            print("OK!")
-
-    def gat_output(self, graph_features):
-        gat_output = self.gat_network(graph_features, self.edge_index)
-        return gat_output
+        self.gat_network.to(device)
+        return self
