@@ -130,6 +130,9 @@ class CustomPZEnv(ParallelEnv, EzPickle):
             missing = [agent for agent in self.agents if agent not in actions]
             raise ValueError(f"Missing actions for agents: {missing}")
         
+        #Increase step of the episode
+        self.current_step += 1
+        
         # Execute actions in the SUMO environment
         self.sumo_env.step(actions)
         
@@ -149,6 +152,32 @@ class CustomPZEnv(ParallelEnv, EzPickle):
         infos = {agent: self.sumo_env.info_tl_id(agent) for agent in self.agents}
         
         return observations, rewards, terminations, truncations, infos
+    
+    def state(self) -> np.ndarray:
+        """Returns the global state of the environment.
+
+        This state is a global view of the environment suitable for centralized training.
+        It is formed by stacking the observations of all individual agents in a predefined order.
+
+        Returns:
+            np.ndarray: A NumPy array representing the global state.
+        """
+        if not self.agents:
+            # If there are no agents, return an empty array with the correct
+            # subsequent dimensions based on self.observation_shape.
+            return np.empty((0, *self.observation_shape), dtype=np.float32)
+
+        individual_observations = []
+        # Iterate in the order of self.agents 
+        for agent_id in self.agents:
+            obs = self.sumo_env.obs(agent_id)  # Get individual agent observation
+            individual_observations.append(obs)
+        
+        # Stack the observations along a new first dimension (the agent dimension)
+        global_state_array = np.stack(individual_observations, axis=0)
+        
+        return global_state_array
+
     
     def render(self) -> None:
         """
